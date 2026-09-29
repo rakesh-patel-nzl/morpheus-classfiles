@@ -1,0 +1,1401 @@
+================================================================================
+HPE MORPHEUS ENTERPRISE SOFTWARE INSTALLATION (H45YZS.A.01)
+LAB COMMANDS AND FILE EDITS - IN LAB ORDER (copy/paste into PuTTY)
+================================================================================
+Source : H45YZS.A.01_LG.pdf (Lab guide, Rev. 25.xx, May 2025)
+Order  : Follows the lab guide exactly, lab by lab, step by step.
+         Page numbers (p.xx) refer to the lab guide PDF.
+
+HOW TO USE
+  - Lines under "RUN ON:" tell you which VM(s) the block goes on.
+  - Lines starting with "#" are notes - do not paste them.
+  - [MYSQL]   = paste inside the mysql client (the "mysql>" prompt has been
+                removed so you can paste directly).
+  - [MYSQLSH] = paste inside MySQL Shell (JS mode, "MySQL JS >" prompt).
+  - [ROOT]    = run as root. Become root first with:  sudo -i
+  - [UI] / [WinSCP] / [BROWSER] = not a command; listed so the order makes sense.
+  - FILE EDIT blocks show the exact text to put in the file between the
+    ----8<---- markers.
+  - Password used throughout: Password123?
+  - Versions: Morpheus 8.0.3 -> upgrade to 8.0.4, MySQL 8.0,
+    MySQL Router 8.0.41. If your instructor gives a different version,
+    change the version in every wget / md5sum / dpkg line.
+
+HOSTS
+  lab-aio     All-in-one appliance
+  lab-lb      172.30.10.160   HAProxy load balancer
+  lab-app-1   172.30.10.161   Morpheus node 1
+  lab-app-2   172.30.10.162   Morpheus node 2
+  lab-app-3   172.30.10.163   Morpheus node 3
+  lab-app-4   172.30.10.164   Morpheus node 4 (Lab 8.2)
+  lab-db-1    172.30.10.171   InnoDB node 1 (seed / primary)
+  lab-db-2    172.30.10.172   InnoDB node 2
+  lab-db-3    172.30.10.173   InnoDB node 3
+  lab-db-4    172.30.10.174   InnoDB node 4 (Lab 7.5)
+
+
+################################################################################
+MODULE 3 - ALL-IN-ONE INSTALLATION AND UPGRADE
+################################################################################
+
+================================================================================
+LAB 3.1  ALL-IN-ONE INSTALLATION                                     (pp.11-24)
+================================================================================
+RUN ON: lab-aio
+
+# Step 4 - SSH to the appliance
+ssh morphadmin@lab-aio
+
+# Step 5 - Update apt
+sudo apt-get update
+
+# Step 6 - Confirm the appliance resolves its own hostname (install fails if not)
+nslookup lab-aio
+
+# Step 8 - Download the package and check the md5 against Morpheus Hub
+wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.5-1_amd64.deb
+md5sum morpheus-appliance_8.0.5-1_amd64.deb
+
+# Step 9 - Install the package
+sudo dpkg -i morpheus-appliance_8.0.5-1_amd64.deb
+
+# Step 10 - Check appliance_url in morpheus.rb (no change needed in the lab)
+sudo cat /etc/morpheus/morpheus.rb
+
+# Step 11 - Reconfigure (takes a few minutes, check for errors)
+sudo morpheus-ctl reconfigure
+
+# Step 12 - Check all services are running
+sudo morpheus-ctl status
+
+# Step 13 [BROWSER] https://lab-aio.megadata.com
+
+# Step 14 - Watch the UI log for the Morpheus logo / version (Ctrl+C to exit)
+sudo tail -f /var/log/morpheus/morpheus-ui/current
+
+# Useful alternatives to show the logo:
+sudo cat /var/log/morpheus/morpheus-ui/current|grep -A1 -B6 "Start Time"
+sudo watch -n 10 'cat /var/log/morpheus/morpheus-ui/current|grep -A1 -B6 "Start Time"'
+
+# Steps 15-22 [UI]
+#   SKIP Hub setup | Master tenant: Morpheus | Master user: Admin
+#   Appliance name / check URL | License: C:\Classfiles\installation class\morpheus_license.txt
+#   Administration > Settings > Appliance: confirm Appliance URL
+#   Administration > Settings > Provisioning > Cloud-Init:
+#       username  morpheusci
+#       password  M0rph@dmin      (capital M, then zero)
+#   Click SAVE
+
+
+================================================================================
+LAB 3.2  CONFIGURE SSL                                               (pp.25-29)
+================================================================================
+# Step 3 [WinSCP] Copy C:\Classfiles\certs\wildcard.crt and wildcard.key
+#                 to /home/morphadmin on lab-aio
+
+RUN ON: lab-aio
+
+# Step 5 - View the existing self-signed cert files
+sudo ls -l /etc/morpheus/ssl
+
+# Step 6 - Put the new cert/key in place (same names = no reconfigure needed)
+sudo chown root:root /home/morphadmin/wildcard.*
+sudo chmod 640 /home/morphadmin/wildcard.*
+sudo mv /home/morphadmin/wildcard.crt /etc/morpheus/ssl/lab-aio.megadata.com.crt
+sudo mv /home/morphadmin/wildcard.key /etc/morpheus/ssl/lab-aio.megadata.com.key
+sudo morpheus-ctl restart nginx
+
+# Step 7 [BROWSER] Clear Chrome browsing data / restart browser and re-check cert
+
+
+================================================================================
+LAB 3.3  CONFIGURE MORPHEUS FOR PROVISIONING                         (pp.30-39)
+================================================================================
+# [UI] only - no CLI commands.
+#   Infrastructure > Groups > +CREATE : All Clouds
+#   Infrastructure > Clouds > +ADD : VMWARE VCENTER
+#       NAME            MegaCloud
+#       CODE            megaCloud
+#       API URL         https://vcenter.megadata.com/sdk
+#       USERNAME        svc.mega@megadata.com
+#       PASSWORD        (System Information Table)
+#       VERSION         7.0+
+#       VDC             MegaData
+#       CLUSTER         Mega
+#       RESOURCE POOL   Resources/MegaData
+#       RPC MODE        Vmware Tools
+#       HIDE HOST SELECTION FROM USERS   Checked
+#   Group: All Clouds > COMPLETE
+#   Provisioning > Instances > +ADD : Ubuntu, All Clouds / MegaCloud
+#       VERSION 24.04, PLAN 1 CPU 2GB, Datastore BRONZE, Network DEV NET,
+#       Folder /MegaData/Development > COMPLETE
+
+
+================================================================================
+LAB 3.4  APPLIANCE BACKUP                                            (pp.40-46)
+================================================================================
+# [UI] only - no CLI commands.
+#   Administration > Settings > Backups : enable Backup Appliance
+#   Infrastructure > Storage > File Shares > +ADD > NFSv3 (per screenshot p.41)
+#   Backups > Backups > Morpheus Appliance > EDIT : Storage = NFS share
+#   RUN NOW, confirm success, download and check file ends "Dump completed"
+
+
+================================================================================
+LAB 3.5  ALL-IN-ONE UPGRADE (8.0.3 -> 8.0.4)                         (pp.47-50)
+================================================================================
+RUN ON: lab-aio
+
+# Step 2 - Check services are running
+sudo morpheus-ctl status
+
+# Step 3 - Download the new package and check md5
+wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.6-1_amd64.deb
+md5sum morpheus-appliance_8.0.6-1_amd64.deb
+
+# Step 4 - Stop the UI and confirm it is down
+sudo morpheus-ctl stop morpheus-ui
+sudo morpheus-ctl status
+
+# Step 5 - Install the new package (RabbitMQ timeout is normal - be patient)
+sudo dpkg -i morpheus-appliance_8.0.6-1_amd64.deb
+
+# Step 6 - Remove old node/VM packages (AFTER dpkg, BEFORE reconfigure)
+sudo rm -Rf /var/opt/morpheus/package-repos/*
+
+# Step 7 - Reconfigure
+sudo morpheus-ctl reconfigure
+
+# Step 8 - Check services restarted
+sudo morpheus-ctl status
+
+# Step 9 - Watch for the logo and new version (Ctrl+C to exit)
+sudo tail -f /var/log/morpheus/morpheus-ui/current
+
+# Step 10 [BROWSER] Log in to the appliance URL
+
+
+################################################################################
+MODULE 4 - INNODB CLUSTER
+################################################################################
+
+================================================================================
+LAB 4.1  INSTALL MYSQL                                               (pp.51-58)
+================================================================================
+RUN ON: lab-db-1, lab-db-2, lab-db-3  (all three)
+
+ssh morphadmin@lab-db-1
+ssh morphadmin@lab-db-2
+ssh morphadmin@lab-db-3
+
+# Step 4 - Each DB VM must resolve the others
+nslookup lab-db-1
+nslookup lab-db-2
+nslookup lab-db-3
+
+# Step 5 - Stop and disable AppArmor
+sudo systemctl stop apparmor
+sudo systemctl disable apparmor
+
+# Step 6 - Firewall should be "inactive"
+#          (if a firewall is used, open 3306, 33060, 33061, 33062)
+sudo ufw status
+
+# Step 7/8 - Download the MySQL APT repo package and check md5
+#            Expected: e1716b19b84b92f32e94dfd34892322c
+wget https://dev.mysql.com/get/mysql-apt-config_0.8.39-1_all.deb
+md5sum mysql-apt-config_0.8.39-1_all.deb
+
+# Step 9/10 - Install the repo package
+#   In the menu: select "MySQL Server & Cluster" > Enter > choose mysql-8.0 >
+#   then scroll DOWN to "Ok" and press Enter (do NOT tab to Ok)
+sudo dpkg -i mysql-apt-config_0.8.39-1_all.deb
+
+# Step 11 - Confirm the mysql-8.0 repo is listed
+cat /etc/apt/sources.list.d/mysql.list
+
+# Only if the wrong version (e.g. 8.4) was chosen:
+sudo dpkg-reconfigure mysql-apt-config
+
+# Step 12 - Update apt
+sudo apt-get update
+
+# Step 13 - Install MySQL
+#   root password: Password123?   then choose "Use Strong Password Encryption"
+sudo apt-get install mysql-server -y
+
+# Step 14 - Confirm packages installed
+sudo apt list --installed | grep mysql
+
+# Step 15 - Hold the package
+sudo apt-mark hold mysql-server
+sudo apt-mark showhold
+
+# Step 16 - Test root login (password: Password123?)
+mysql -u root -p
+
+
+================================================================================
+LAB 4.2  CONFIGURE MYSQL                                             (pp.59-62)
+================================================================================
+RUN ON: lab-db-1, lab-db-2, lab-db-3  (all three)
+
+mysql -u root -p
+
+# Step 1 [MYSQL] Basic hardening
+DELETE FROM mysql.user WHERE User='';
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+
+# Step 2 [MYSQL] Enable invisible primary keys, then confirm value = ON
+set persist sql_generate_invisible_primary_key=1;
+SHOW GLOBAL VARIABLES LIKE 'sql_generate_invisible_primary_key';
+
+# Step 3 [MYSQL] Create the Cluster Admin account
+CREATE USER 'clusterAdmin'@'%' IDENTIFIED BY 'Password123?';
+GRANT ALL PRIVILEGES ON *.* TO 'clusterAdmin'@'%' with grant option;
+FLUSH PRIVILEGES;
+quit
+
+# Step 4 - Open mysqld.cnf for editing
+sudo vi /etc/mysql/mysql.conf.d/mysqld.cnf
+
+# Steps 5 & 6 - FILE EDIT: /etc/mysql/mysql.conf.d/mysqld.cnf
+#   Add these lines UNDER the existing [mysqld] section (after log-error),
+#   then add the [mysqldump] section at the end of the file.
+----8<---- (paste under [mysqld]) ----
+bind-address = 0.0.0.0
+max_connections = 451
+innodb_buffer_pool_size=12G
+innodb_buffer_pool_instances=12
+innodb_use_fdatasync=ON
+sql_generate_invisible_primary_key=1
+binlog_expire_logs_seconds=604800
+binlog_expire_logs_auto_purge=ON
+max_allowed_packet = 256M
+default_time_zone = "+00:00"
+character-set-server=utf8mb4
+collation-server=utf8mb4_general_ci
+----8<---- (paste at end of file) ----
+[mysqldump]
+set-gtid-purged=OFF
+----8<----
+
+# The finished section should look like this (p.60):
+#   [mysqld]
+#   pid-file        = /var/run/mysqld/mysqld.pid
+#   socket          = /var/run/mysqld/mysqld.sock
+#   datadir         = /var/lib/mysql
+#   log-error       = /var/log/mysql/error.log
+#   bind-address = 0.0.0.0
+#   ... (lines above) ...
+#   collation-server=utf8mb4_general_ci
+#   [mysqldump]
+#   set-gtid-purged=OFF
+
+# Step 7 - Restart MySQL
+sudo systemctl restart mysql
+
+# Step 8 - Log in and verify the variables
+mysql -u root -p
+
+# [MYSQL]
+show variables like "max_connections";
+show variables like "max_allowed_packet";
+select @@global.time_zone;
+show variables like 'char%';
+show variables like 'collation%';
+SELECT @@innodb_buffer_pool_size;
+SELECT @@innodb_buffer_pool_instances;
+SELECT @@innodb_use_fdatasync;
+show variables like "binlog_expire_logs_seconds";
+show variables like "binlog_expire_logs_auto_purge";
+quit
+
+
+================================================================================
+LAB 4.3  CONFIGURE MYSQL REQUIREMENTS FOR AN INNODB CLUSTER          (pp.63-66)
+================================================================================
+# Step 1 - Install MySQL Shell
+RUN ON: lab-db-1, lab-db-2, lab-db-3  (all three)
+sudo apt-get install mysql-shell -y
+
+# Step 2 - Start MySQL Shell
+RUN ON: ONE database VM only (e.g. lab-db-1)
+mysqlsh
+
+# Step 3 [MYSQLSH] Check each instance
+#   (enter clusterAdmin password and Y to save it when prompted)
+dba.checkInstanceConfiguration('clusterAdmin@lab-db-1:3306')
+dba.checkInstanceConfiguration('clusterAdmin@lab-db-2:3306')
+dba.checkInstanceConfiguration('clusterAdmin@lab-db-3:3306')
+
+# Step 4 [MYSQLSH] Configure each instance (answer y to changes and restart)
+dba.configureInstance('clusterAdmin@lab-db-1:3306')
+dba.configureInstance('clusterAdmin@lab-db-2:3306')
+dba.configureInstance('clusterAdmin@lab-db-3:3306')
+
+# Step 5 [MYSQLSH] Re-check - each should return status "ok"
+dba.checkInstanceConfiguration('clusterAdmin@lab-db-1:3306')
+dba.checkInstanceConfiguration('clusterAdmin@lab-db-2:3306')
+dba.checkInstanceConfiguration('clusterAdmin@lab-db-3:3306')
+
+
+================================================================================
+LAB 4.4  CREATE AN INNODB CLUSTER                                    (pp.67-71)
+================================================================================
+RUN ON: MySQL Shell (still open from Lab 4.3)
+
+# Step 1 [MYSQLSH] Connect to the seed instance
+\c clusterAdmin@lab-db-1:3306
+
+# Step 2 [MYSQLSH] Create the cluster
+cluster = dba.createCluster('morpheus-cluster')
+
+# Step 3 [MYSQLSH] Status - expect OK_NO_TOLERANCE
+cluster.status()
+
+# Step 4 [MYSQLSH] Add lab-db-2 (press Enter to accept Clone recovery)
+cluster.addInstance("lab-db-2:3306")
+
+# Step 5 [MYSQLSH]
+cluster.status()
+
+# Step 6 [MYSQLSH] Add lab-db-3 (press Enter to accept Clone recovery)
+cluster.addInstance("lab-db-3:3306")
+
+# Step 7 [MYSQLSH] Status - expect OK, can tolerate 1 failure, Single-Primary
+cluster.status()
+
+# Step 8 [MYSQLSH] Create the MySQL Router account (password: Password123?)
+cluster.setupRouterAccount('')
+
+# NOTE: the account name is empty in the lab guide (p.71). If it errors,
+#       use the account that is used later in the bootstrap:
+#       cluster.setupRouterAccount('routeruser')
+
+# Step 9 [MYSQLSH] Quit
+\quit
+
+
+================================================================================
+LAB 4.5  VERIFY REPLICATION FROM PRIMARY TO REPLICAS                   (p.72)
+================================================================================
+RUN ON: lab-db-1, lab-db-2, lab-db-3
+
+# Step 1 - Log in on all DB VMs
+mysql -u root -p
+
+# Step 2 [MYSQL] PRIMARY (lab-db-1) only
+CREATE DATABASE testdb;
+
+# Step 3 [MYSQL] ALL nodes - testdb should appear everywhere
+show databases;
+
+# Step 4 [MYSQL] One REPLICA - expected to FAIL (super-read-only)
+use testdb;
+CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(255));
+
+# Step 5 [MYSQL] PRIMARY - succeeds
+use testdb;
+CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(255));
+INSERT INTO testdb.test VALUES (1, 'neo');
+
+# Step 6 [MYSQL] BOTH REPLICAS - read the data
+SELECT * FROM testdb.test;
+
+# Step 7 [MYSQL] PRIMARY - clean up
+DROP DATABASE testdb;
+
+
+################################################################################
+MODULE 5 - HIGH AVAILABILITY INSTALLATION AND UPGRADE
+################################################################################
+
+================================================================================
+LAB 5.1  INSTALL AND CONFIGURE HAPROXY                               (pp.73-75)
+================================================================================
+# Step 1 [WinSCP] Copy C:\Classfiles\installation class\haproxy.txt
+#                 to /home/morphadmin on lab-lb
+
+RUN ON: lab-lb
+
+ssh morphadmin@lab-lb
+
+# Step 3
+sudo apt-get update
+
+# Step 4
+sudo apt-get install haproxy -y
+
+# Step 5 - Move config into place, set owner/permissions
+sudo mv /home/morphadmin/haproxy.txt /etc/haproxy/haproxy.cfg
+sudo chown root:root /etc/haproxy/haproxy.cfg
+sudo chmod 644 /etc/haproxy/haproxy.cfg
+
+# Step 6 - Config check (no alerts expected)
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+
+# Step 7 - Restart and enable at boot
+sudo systemctl restart haproxy
+sudo systemctl enable haproxy
+
+# Step 8 - Confirm running
+sudo systemctl status haproxy
+
+# Step 9 [BROWSER] http://lab-lb:9000/stats   (everything shows DOWN for now)
+
+
+================================================================================
+LAB 5.2  INSTALL HPE MORPHEUS SOFTWARE                               (pp.76-77)
+================================================================================
+RUN ON: lab-app-1, lab-app-2, lab-app-3  (all three)
+
+ssh morphadmin@lab-app-1
+ssh morphadmin@lab-app-2
+ssh morphadmin@lab-app-3
+
+# Step 2
+sudo apt-get update
+
+# Steps 3/4 - Each node resolves itself and the other two
+nslookup lab-app-1
+nslookup lab-app-2
+nslookup lab-app-3
+
+# Step 5 - Download and check md5
+wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.5-1_amd64.deb
+md5sum morpheus-appliance_8.0.5-1_amd64.deb
+
+# Step 6 - Install
+sudo dpkg -i morpheus-appliance_8.0.5-1_amd64.deb
+
+# !!! WARNING: Do NOT run morpheus-ctl reconfigure yet !!!
+
+
+================================================================================
+LAB 5.3  CONFIGURE THE MORPHEUS DATABASE                             (pp.78-79)
+================================================================================
+RUN ON: PRIMARY database only (lab-db-1)
+
+mysql -u root -p
+
+# [MYSQL] Step 3 - Create the database
+CREATE DATABASE morpheus CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+
+# [MYSQL] Step 4
+show databases;
+
+# [MYSQL] Step 5 - Create the Morpheus DB user
+CREATE USER 'morpheus'@'%' IDENTIFIED by 'Password123?';
+
+# [MYSQL] Step 6
+select host, user from mysql.user;
+
+# [MYSQL] Step 7 - Grants
+GRANT ALL PRIVILEGES ON morpheus.* TO 'morpheus'@'%' with grant option;
+GRANT SELECT, PROCESS, SHOW DATABASES, SUPER, RELOAD ON *.* TO 'morpheus'@'%';
+FLUSH PRIVILEGES;
+
+# [MYSQL] Step 8
+SHOW GRANTS FOR 'morpheus'@'%';
+quit
+
+
+================================================================================
+LAB 5.4  INSTALL AND CONFIGURE MYSQL ROUTER                          (pp.80-85)
+================================================================================
+RUN ON: lab-app-1, lab-app-2, lab-app-3  (steps 2-5 on all three)
+
+# Step 2 - Each app node resolves all DB nodes
+nslookup lab-db-1
+nslookup lab-db-2
+nslookup lab-db-3
+
+# Step 3 - Download MySQL Router and check md5 (compare with dev.mysql.com)
+#          NOTE: the URL is wrapped in the PDF - it is ONE line here
+wget https://dev.mysql.com/get/Downloads/MySQL-Router/mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
+md5sum mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
+
+# Step 5 - Install
+sudo dpkg -i mysql-router-community_8.0.41-1ubuntu22.04_amd64.deb
+
+# ---------- lab-app-1 ONLY (steps 6-10) ----------
+RUN ON: lab-app-1
+
+# Step 6 - Bootstrap (clusterAdmin + routeruser password: Password123?)
+sudo mysqlrouter --bootstrap clusterAdmin@lab-db-1:3306 --account routeruser --user=mysqlrouter --disable-rest
+
+# Step 7
+sudo systemctl restart mysqlrouter
+sudo systemctl enable mysqlrouter
+
+# Step 8 - Confirm listening ports (6446 R/W, 6447 R/O)
+sudo lsof -i -P -n | grep LISTEN | grep mysqlrouter
+
+# Step 9 - View generated config and state file
+sudo cat /etc/mysqlrouter/mysqlrouter.conf
+sudo cat /var/lib/mysqlrouter/state.json
+
+# Step 10 - Test a connection through the router
+/opt/morpheus/embedded/mysql/bin/mysql -u morpheus -h 127.0.0.1 -P 6446 -p
+
+# [MYSQL]
+show databases;
+quit
+
+# ---------- lab-app-2 and lab-app-3 (steps 11-13) ----------
+RUN ON: lab-app-2, lab-app-3
+
+# Step 11 - Bootstrap (same routeruser password as lab-app-1)
+sudo mysqlrouter --bootstrap clusterAdmin@lab-db-1:3306 --account routeruser --user=mysqlrouter --disable-rest
+
+# Step 12
+sudo systemctl restart mysqlrouter
+sudo systemctl enable mysqlrouter
+
+# Step 13 - Test connection
+/opt/morpheus/embedded/mysql/bin/mysql -u morpheus -h 127.0.0.1 -P 6446 -p
+
+
+================================================================================
+LAB 5.5  MOUNT THE SHARED STORAGE                                    (pp.85-86)
+================================================================================
+RUN ON: lab-app-1, lab-app-2, lab-app-3  (all three)
+
+# Step 2 - Create mountpoint
+sudo mkdir -p /var/opt/morpheus/morpheus-ui
+
+# Step 3 - Add the NFS line to /etc/fstab
+#          NOTE: wrapped in the PDF - it is ONE line here
+echo "nas.megadata.com:/mnt/megadata-share/morpheus-ui /var/opt/morpheus/morpheus-ui nfs defaults 0 0" | sudo tee -a /etc/fstab
+
+# Check the line was added
+sudo cat /etc/fstab
+
+# Step 4 - NFS client
+sudo apt-get install nfs-common -y
+
+# Step 5 - Mount
+sudo mount -a
+
+# Step 6 - Confirm mounted
+df -k
+
+
+================================================================================
+LAB 5.6  CONFIGURE THE MORPHEUS.RB FILE                              (pp.87-89)
+================================================================================
+# Step 1 [WinSCP] Copy from C:\Classfiles\installation class to /home/morphadmin:
+#     lab-app-1.morpheus.rb -> lab-app-1
+#     lab-app-2.morpheus.rb -> lab-app-2
+#     lab-app-3.morpheus.rb -> lab-app-3
+
+# ---------- lab-app-1 ----------
+RUN ON: lab-app-1
+sudo chown root:root /home/morphadmin/lab-app-1.morpheus.rb
+sudo chmod 600 /home/morphadmin/lab-app-1.morpheus.rb
+sudo mv /home/morphadmin/lab-app-1.morpheus.rb /etc/morpheus/morpheus.rb
+
+# ---------- lab-app-2 ----------
+RUN ON: lab-app-2
+sudo chown root:root /home/morphadmin/lab-app-2.morpheus.rb
+sudo chmod 600 /home/morphadmin/lab-app-2.morpheus.rb
+sudo mv /home/morphadmin/lab-app-2.morpheus.rb /etc/morpheus/morpheus.rb
+
+# ---------- lab-app-3 ----------
+RUN ON: lab-app-3
+sudo chown root:root /home/morphadmin/lab-app-3.morpheus.rb
+sudo chmod 600 /home/morphadmin/lab-app-3.morpheus.rb
+sudo mv /home/morphadmin/lab-app-3.morpheus.rb /etc/morpheus/morpheus.rb
+
+# Verify on each node
+sudo cat /etc/morpheus/morpheus.rb
+
+# FILE CONTENT (reference / if you need to type it): /etc/morpheus/morpheus.rb
+# Transcribed from the screenshots on pp.88-89. Only the three lines marked
+# <<< differ between nodes.
+----8<---- lab-app-1 ----
+appliance_url 'https://lab-app-1.megadata.com'
+elasticsearch['es_hosts'] = {'172.30.10.161' => 9200, '172.30.10.162' => 9200, '172.30.10.163' => 9200}
+elasticsearch['node_name'] = '172.30.10.161'
+elasticsearch['host'] = '0.0.0.0'
+rabbitmq['host'] = '0.0.0.0'
+rabbitmq['nodename'] = 'rabbit@lab-app-1'
+mysql['enable'] = false
+mysql['host'] = {'127.0.0.1' => 6446}
+mysql['morpheus_db'] = 'morpheus'
+mysql['morpheus_db_user'] = 'morpheus'
+mysql['morpheus_password'] = 'Password123?'
+mysql['max_active'] = 150
+user['uid'] = 1099
+user['gid'] = 1099
+node.default['morpheus_solo']['local_user']['uid'] = 1098
+node.default['morpheus_solo']['local_user']['gid'] = 1098
+elasticsearch['uid'] = 1096
+elasticsearch['gid'] = 1096
+rabbitmq['uid'] = 1095
+rabbitmq['gid'] = 1095
+guacd['uid'] = 1094
+guacd['gid'] = 1094
+----8<----
+# lab-app-2: same file but change these three lines:
+appliance_url 'https://lab-app-2.megadata.com'
+elasticsearch['node_name'] = '172.30.10.162'
+rabbitmq['nodename'] = 'rabbit@lab-app-2'
+# lab-app-3: same file but change these three lines:
+appliance_url 'https://lab-app-3.megadata.com'
+elasticsearch['node_name'] = '172.30.10.163'
+rabbitmq['nodename'] = 'rabbit@lab-app-3'
+
+# Step 2 - Reconfigure ONE NODE AT A TIME (lab-app-1, wait, then 2, then 3)
+#          Running all three at once can break database seeding.
+sudo morpheus-ctl reconfigure
+
+# Step 3 - Verify tables exist (from any app node)
+/opt/morpheus/embedded/mysql/bin/mysql -u morpheus -h 127.0.0.1 -P 6446 -p
+
+# [MYSQL]
+use morpheus;
+show tables;
+quit
+
+
+================================================================================
+LAB 5.7  CHECK ELASTICSEARCH CLUSTERING                                 (p.91)
+================================================================================
+RUN ON: any Morpheus app node
+
+# Step 1 - number_of_nodes and number_of_data_nodes should be 3
+curl -XGET 'http://localhost:9200/_cluster/health?pretty=true'
+
+# Step 2 - Troubleshooting only (if curl fails to connect)
+ss -tulp | grep 9200
+sudo view /var/log/morpheus/elasticsearch/current
+sudo sysctl vm.max_map_count
+sudo sysctl -w vm.max_map_count=262144
+
+
+================================================================================
+LAB 5.8  CONFIGURE RABBITMQ CLUSTERING                               (pp.92-97)
+================================================================================
+# ALL commands in this lab are run as ROOT.  Become root with:  sudo -i
+# ALWAYS source the profile before rabbitmqctl. If you see
+# "Command 'rabbitmqctl' not found ... apt install rabbitmq-server"
+# DO NOT install it - you just forgot to source the profile.
+# (The note on p.92 shows /opt/Morpheus/... with a capital M - the correct
+#  path is lowercase: /opt/morpheus/...)
+
+# Step 2 - Stop UI and RabbitMQ
+RUN ON: lab-app-2, lab-app-3   [ROOT]
+sudo -i
+morpheus-ctl stop morpheus-ui
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl stop_app
+morpheus-ctl stop rabbitmq
+
+# Step 3 - Show the secrets on the Source of Truth node
+RUN ON: lab-app-1
+sudo cat /etc/morpheus/morpheus-secrets.json
+
+# Step 4 - FILE EDIT on lab-app-2 and lab-app-3   [ROOT]
+#   Overwrite the three values in the "rabbitmq" section with the values
+#   copied from lab-app-1. Section looks like this (values are YOUR lab's):
+vi /etc/morpheus/morpheus-secrets.json
+----8<---- (structure only - use lab-app-1's actual values) ----
+  "rabbitmq": {
+    "morpheus_password": "<value from lab-app-1>",
+    "queue_user_password": "<value from lab-app-1>",
+    "cookie": "<value from lab-app-1>"
+  },
+----8<----
+
+# Step 5 - Show the erlang cookie on lab-app-1
+RUN ON: lab-app-1
+sudo cat /opt/morpheus/embedded/rabbitmq/.erlang.cookie
+
+# FILE EDIT on lab-app-2 and lab-app-3   [ROOT]
+#   Replace the whole contents with the cookie value from lab-app-1.
+vi /opt/morpheus/embedded/rabbitmq/.erlang.cookie
+
+# Step 6 - Reconfigure (both at the same time is OK)
+RUN ON: lab-app-2, lab-app-3   [ROOT]
+morpheus-ctl reconfigure
+
+# Step 7 - Join the cluster (a timeout on stop is normal - check status)
+RUN ON: lab-app-2, lab-app-3   [ROOT]
+morpheus-ctl stop rabbitmq
+morpheus-ctl status rabbitmq
+morpheus-ctl start rabbitmq
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl stop_app
+rabbitmqctl join_cluster rabbit@lab-app-1
+rabbitmqctl start_app
+
+# Step 8 - Check cluster: 3 disk nodes and 3 running nodes
+RUN ON: lab-app-1, lab-app-2, lab-app-3   [ROOT]
+# (on lab-app-1 do "sudo -i" and source the profile first)
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl cluster_status
+
+# Step 9 - Reconfigure and start UI (both at the same time is OK)
+RUN ON: lab-app-2, lab-app-3   [ROOT]
+morpheus-ctl reconfigure
+morpheus-ctl start morpheus-ui
+
+# Step 10 - Check vhost and policies
+RUN ON: any app node   [ROOT]
+rabbitmqctl list_vhosts
+rabbitmqctl list_policies --vhost morpheus
+
+# Step 11 - Enable the management plug-in
+RUN ON: lab-app-1, lab-app-2, lab-app-3   [ROOT]
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmq-plugins enable rabbitmq_management
+
+# Step 12 [BROWSER] http://lab-app-1:15672/
+#   user: morpheus   password: rabbitmq morpheus_password in
+#   /etc/morpheus/morpheus-secrets.json
+
+# Leave root when done
+exit
+
+
+================================================================================
+LAB 5.9  PERFORM INITIAL SETUP                                      (pp.98-105)
+================================================================================
+# [UI] only - no CLI commands.
+#   https://lab-app-1.megadata.com  > SKIP Hub setup
+#   Master tenant: Morpheus New | Master user: Admin
+#   Appliance name: Morpheus New | No license needed > COMPLETE SETUP
+#   Administration > Health  (append /live to the URL for live metrics)
+
+
+================================================================================
+LAB 5.10  CONFIGURE MORPHEUS TO USE LOAD BALANCER                  (pp.106-107)
+================================================================================
+# Step 2 [BROWSER] Check https://lab-app-2.megadata.com and
+#                  https://lab-app-3.megadata.com
+
+RUN ON: lab-app-1, lab-app-2, lab-app-3  (all three)
+
+# Step 4
+sudo morpheus-ctl stop morpheus-ui
+
+# Step 5 - FILE EDIT: /etc/morpheus/morpheus.rb
+sudo vi /etc/morpheus/morpheus.rb
+#   Change the appliance_url line to:
+----8<----
+appliance_url 'https://lab-lb.megadata.com'
+----8<----
+
+# Step 6
+sudo morpheus-ctl reconfigure
+
+# Step 7
+sudo morpheus-ctl start morpheus-ui
+
+# Step 8 [BROWSER] https://lab-lb.megadata.com  (wait a few minutes)
+# Step 9 [UI] Administration > Settings > Appliance :
+#             Appliance URL = https://lab-lb.megadata.com  > SAVE
+
+
+================================================================================
+LAB 5.11  CONFIGURE SSL TERMINATION ON LOAD BALANCER               (pp.108-110)
+================================================================================
+# Step 4 [WinSCP] Copy C:\Classfiles\certs\wildcard.crt and wildcard.key
+#                 to /home/morphadmin on lab-lb
+
+RUN ON: lab-lb
+
+# Step 6 - Build the pem (key + crt in one file)
+#          NOTE: wrapped in the PDF - it is ONE line here
+sudo cat /home/morphadmin/wildcard.key /home/morphadmin/wildcard.crt | sudo tee /home/morphadmin/lab-lb.pem
+
+sudo mv /home/morphadmin/lab-lb.pem /etc/ssl
+sudo chmod 600 /etc/ssl/lab-lb.pem
+
+# Step 7 - FILE EDIT: /etc/haproxy/haproxy.cfg  (the #http/443 section)
+sudo vi /etc/haproxy/haproxy.cfg
+#   Two changes:
+#     1) add " ssl crt /etc/ssl/lab-lb.pem" to the end of the bind line
+#     2) add " ssl" after ":443" on each of the three server lines
+#   Finished section (p.110):
+----8<----
+#http/443
+frontend http_front_tls
+    bind *:443 ssl crt /etc/ssl/lab-lb.pem
+    mode tcp
+    log global
+    option tcplog
+    default_backend http_back_tls
+
+backend http_back_tls
+    balance source
+    mode tcp
+    log global
+    option httpchk GET /ping
+    http-check expect string MORPHEUS\ PING
+    server lab-app-1 172.30.10.161:443 ssl verify none check port 80
+    server lab-app-2 172.30.10.162:443 ssl verify none check port 80
+    server lab-app-3 172.30.10.163:443 ssl verify none check port 80
+----8<----
+
+# Step 8 - Config check
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+
+# Step 9 - Restart
+sudo systemctl restart haproxy
+
+# Step 10 [BROWSER] https://lab-lb.megadata.com  (clear browser data if needed)
+
+
+================================================================================
+LAB 5.12  HIGH AVAILABILITY UPGRADE (8.0.3 -> 8.0.4, NON-ROLLING)  (pp.111-115)
+================================================================================
+# Step 1 [UI] Check Administration > Health - all green, 3 Elastic nodes,
+#             no queued messages, no blocked threads
+
+# ---------- PRE-UPGRADE HEALTH CHECKS ----------
+# Step 2
+RUN ON: lab-app-1, lab-app-2, lab-app-3
+sudo morpheus-ctl status
+
+# Step 3 - Elasticsearch should show 3 nodes
+curl -XGET 'http://localhost:9200/_cluster/health?pretty=true'
+
+# Step 4 - RabbitMQ: 3 running nodes   [ROOT]
+RUN ON: lab-app-1, lab-app-2, lab-app-3
+sudo -i
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl cluster_status
+exit
+
+# Step 5 - InnoDB cluster: 3 nodes
+RUN ON: one DB node (e.g. lab-db-1)
+mysqlsh
+
+# [MYSQLSH]
+\c clusterAdmin@lab-db-1:3306
+cluster = dba.getCluster()
+cluster.status()
+\quit
+
+# Step 7 [UI] Backups > Backups > Morpheus Appliance > RUN NOW, download,
+#             check the file ends with "Dump Completed"
+
+# ---------- UPGRADE ----------
+# Step 8 - Stop the UI on ALL THREE nodes first
+RUN ON: lab-app-1, lab-app-2, lab-app-3
+sudo morpheus-ctl stop morpheus-ui
+
+# Step 9 - Download on ALL THREE nodes
+#          Expected md5: ec1c466391003493d49ce8ac94ee585a
+wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.6-1_amd64.deb
+md5sum morpheus-appliance_8.0.6-1_amd64.deb
+
+# Step 10 - lab-app-1 ONLY (finish fully before moving on)
+RUN ON: lab-app-1
+sudo dpkg -i morpheus-appliance_8.0.6-1_amd64.deb
+sudo rm -rf /var/opt/morpheus/package-repos/*
+sudo morpheus-ctl reconfigure
+sudo morpheus-ctl tail morpheus-ui
+# Wait for the logo + version 8.0.4, then Ctrl+C
+
+# Step 11 - lab-app-2 ONLY (finish fully before moving on)
+RUN ON: lab-app-2
+sudo dpkg -i morpheus-appliance_8.0.6-1_amd64.deb
+sudo rm -rf /var/opt/morpheus/package-repos/*
+sudo morpheus-ctl reconfigure
+sudo morpheus-ctl tail morpheus-ui
+# Wait for the logo + version 8.0.6, then Ctrl+C
+
+# Step 12 - lab-app-3 ONLY
+RUN ON: lab-app-3
+sudo dpkg -i morpheus-appliance_8.0.6-1_amd64.deb
+sudo rm -rf /var/opt/morpheus/package-repos/*
+sudo morpheus-ctl reconfigure
+sudo morpheus-ctl tail morpheus-ui
+# Wait for the logo + version 8.0.6, then Ctrl+C
+
+# ---------- POST-UPGRADE HEALTH CHECKS ----------
+# Step 13 - Elasticsearch
+RUN ON: any app node
+curl -XGET 'http://localhost:9200/_cluster/health?pretty=true'
+
+# Step 14 - RabbitMQ   [ROOT]
+sudo -i
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl cluster_status
+exit
+
+# Step 15 - InnoDB
+RUN ON: one DB node
+mysqlsh
+
+# [MYSQLSH]
+\c clusterAdmin@lab-db-1:3306
+cluster = dba.getCluster()
+cluster.status()
+\quit
+
+# Steps 16/17 [UI] Check version at bottom of screen; Administration > Health
+
+
+################################################################################
+MODULE 6 - DATABASE MIGRATION
+################################################################################
+
+================================================================================
+LAB 6.1  DATABASE MIGRATION FROM ALL-IN-ONE TO THREE-NODES         (pp.116-121)
+================================================================================
+# ---------- Back up the all-in-one appliance ----------
+RUN ON: lab-aio
+
+# Step 1
+sudo morpheus-ctl stop morpheus-ui
+
+# Step 2 - Copy the "morpheus_password" from the "mysql" section
+sudo cat /etc/morpheus/morpheus-secrets.json
+
+# Step 3 - Dump the DB (enter the morpheus_password when prompted)
+#          Written as ONE line here (the PDF uses a "\" line break)
+/opt/morpheus/embedded/mysql/bin/mysqldump -u morpheus -h 127.0.0.1 morpheus -p > /tmp/morpheus_backup.sql
+
+# Step 4 - Confirm the dump ends with "Dump completed"
+head /tmp/morpheus_backup.sql
+tail /tmp/morpheus_backup.sql
+
+# Step 5 - Copy to the InnoDB primary
+scp /tmp/morpheus_backup.sql morphadmin@lab-db-1:/tmp
+
+# ---------- Import to the three-node HA appliance ----------
+# Step 6
+RUN ON: lab-app-1, lab-app-2, lab-app-3
+sudo morpheus-ctl stop morpheus-ui
+
+# Step 7 - Import (password: InnoDB morpheus user = Password123?)
+RUN ON: lab-db-1
+mysql -u morpheus -h lab-db-1 morpheus -p < /tmp/morpheus_backup.sql
+
+# Step 8
+RUN ON: lab-app-1, lab-app-2, lab-app-3
+sudo morpheus-ctl start morpheus-ui
+
+# Steps 9/10 [UI] Log in with the AIO Admin credentials; check MegaCloud and
+#                 the instance are visible
+
+# ---------- Update the Morpheus Agent on the provisioned Ubuntu VM ----------
+RUN ON: the Ubuntu instance provisioned in Lab 3.3 (log in as morpheusci)
+
+# Step 11b
+sudo morpheus-node-ctl stop morphd
+
+# Step 11c - FILE EDIT: /etc/morpheus/morpheus-node.rb
+sudo vi /etc/morpheus/morpheus-node.rb
+#   Change ONLY these two lines (leave all other lines as they are):
+----8<----
+package['appliance_url'] = 'https://lab-lb.megadata.com/'
+morphd['no_proxy'] = 'lab-lb.megadata.com'
+----8<----
+
+# Step 11d
+sudo morpheus-node-ctl reconfigure
+
+# Step 11e
+sudo morpheus-node-ctl start
+
+# Step 13 [UI] Administration > Settings > Appliance :
+#              Appliance URL = https://lab-lb.megadata.com  > SAVE
+
+# ---------- Fix the appliance backup job password / port ----------
+RUN ON: lab-db-1 (InnoDB primary)
+
+# Step 14
+mysql -u root -p
+
+# [MYSQL] Step 15 - get the backup job ID
+use morpheus;
+select id from backup where name = 'Morpheus Appliance';
+
+# [MYSQL] Step 16 - check current values
+select target_port, target_password from backup where name = 'Morpheus Appliance';
+
+# [MYSQL] Step 17 - update (id = 1 per the lab guide; use your ID from step 15)
+UPDATE backup SET target_password = 'Password123?' WHERE id = 1;
+UPDATE backup SET target_port = 6446 where id = 1;
+quit
+
+# Step 18 [UI] Backups > Backups > Morpheus Appliance > RUN NOW
+
+
+################################################################################
+MODULE 7 - INNODB TROUBLESHOOTING (SUPPLEMENTAL)
+################################################################################
+
+================================================================================
+LAB 7.1  MYSQL SHELL                                               (pp.121-123)
+================================================================================
+RUN ON: any DB node
+
+mysqlsh
+
+# [MYSQLSH]
+\sql
+show databases;
+# (the above errors - not connected yet)
+\c clusterAdmin@lab-db-1:3306
+show databases;
+\status
+\disconnect
+\status
+\quit
+
+
+================================================================================
+LAB 7.2  GET CLUSTER STATUS                                        (pp.124-126)
+================================================================================
+RUN ON: any DB node
+
+mysqlsh
+
+# [MYSQLSH]
+\c clusterAdmin@lab-db-1:3306
+cluster = dba.getCluster()
+cluster.status()
+cluster.status().defaultReplicaSet.status
+cluster.status().defaultReplicaSet.topology["lab-db-3:3306"].status
+cluster.status({extended: 1})
+cluster.describe()
+cluster.options()
+
+# Step 8 - Help
+\c clusterAdmin@lab-db-1:3306
+cluster = dba.getCluster();
+cluster.help('addInstance')
+
+
+================================================================================
+LAB 7.3  CHANGE THE PRIMARY INSTANCE                                  (p.127)
+================================================================================
+# [MYSQLSH]
+\c clusterAdmin@lab-db-1:3306
+cluster = dba.getCluster()
+cluster.status()
+cluster.setPrimaryInstance('lab-db-2:3306')
+cluster = dba.getCluster()
+cluster.status()
+
+
+================================================================================
+LAB 7.4  REMOVE A NODE FROM THE CLUSTER                            (pp.128-129)
+================================================================================
+# [MYSQLSH]
+\c clusterAdmin@lab-db-1:3306
+cluster = dba.getCluster()
+cluster.removeInstance('clusterAdmin@lab-db-3:3306')
+cluster.status()
+cluster.checkInstanceState("lab-db-3:3306")
+
+
+================================================================================
+LAB 7.5  ADD A NODE TO THE CLUSTER                                 (pp.130-131)
+================================================================================
+RUN ON: lab-db-4  (MySQL + MySQL Shell already installed per Labs 4.1/4.2)
+
+ssh morphadmin@lab-db-4
+
+# Steps 1/2
+sudo systemctl status mysql
+sudo systemctl start mysql
+
+# Step 3
+mysqlsh
+
+# [MYSQLSH]
+\c clusterAdmin@lab-db-1:3306
+
+# Step 4 - answer yes to changes and restart
+dba.configureInstance('clusterAdmin@lab-db-4:3306')
+
+# Step 5 - Incremental recovery may take a few minutes
+cluster=dba.getCluster()
+cluster.addInstance('clusterAdmin@lab-db-4:3306')
+
+# Steps 6/7
+cluster.status()
+cluster.checkInstanceState("lab-db-4:3306")
+
+
+================================================================================
+LAB 7.6  SHUT DOWN / START UP THE CLUSTER                          (pp.132-133)
+================================================================================
+# ---------- Stop ----------
+# Step 1
+RUN ON: every Morpheus app node
+sudo morpheus-ctl stop morpheus-ui
+sudo systemctl stop mysqlrouter
+
+# Step 2 - ONE DB node at a time
+RUN ON: each DB node in the cluster
+sudo systemctl stop mysql
+
+# ---------- Start ----------
+# Step 3
+RUN ON: all DB nodes
+sudo systemctl start mysql
+
+# Steps 4-7
+RUN ON: one DB node
+mysqlsh
+
+# [MYSQLSH]
+\c clusterAdmin@lab-db-1:3306
+cluster = dba.getCluster()
+# (error expected - cluster not running)
+dba.rebootClusterFromCompleteOutage()
+cluster = dba.getCluster()
+cluster.status()
+\quit
+
+# Steps 8/9
+RUN ON: every Morpheus app node
+sudo systemctl start mysqlrouter
+sudo morpheus-ctl start morpheus-ui
+
+
+================================================================================
+LAB 7.7  MYSQL SHELL SHOW AND WATCH                                   (p.134)
+================================================================================
+# [MYSQLSH]
+\c clusterAdmin@lab-db-1:3306
+\show query SHOW FULL PROCESSLIST
+\watch query --interval=10 SHOW FULL PROCESSLIST
+# Ctrl+C to stop the watch
+
+
+################################################################################
+MODULE 8 - ADDING AND REMOVING MORPHEUS NODES (SUPPLEMENTAL)
+################################################################################
+
+================================================================================
+LAB 8.1  UNINSTALLING MORPHEUS FROM A NODE                         (pp.135-137)
+================================================================================
+# Steps 1/2 - Have a DB backup and do the health checks (see Lab 5.12)
+
+RUN ON: lab-app-3
+
+# Step 3a
+sudo morpheus-ctl stop morpheus-ui
+
+# Step 3b
+sudo umount /var/opt/morpheus/morpheus-ui
+
+# Step 3c - FILE EDIT: /etc/fstab - comment out the NFS line
+sudo vi /etc/fstab
+----8<----
+#nas.megadata.com:/mnt/megadata-share/morpheus-ui /var/opt/morpheus/morpheus-ui nfs defaults 0 0
+----8<----
+
+# Step 3d - Leave the RabbitMQ cluster   [ROOT]
+sudo -i
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl stop_app
+rabbitmqctl reset
+rabbitmqctl start_app
+exit
+
+# Step 4 - Confirm lab-app-3 has left   [ROOT]
+RUN ON: lab-app-1 or lab-app-2
+sudo -i
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl cluster_status
+exit
+
+# Steps 5-7 - !!! lab-app-3 ONLY - NEVER on lab-app-1 or lab-app-2 !!!
+RUN ON: lab-app-3
+sudo morpheus-ctl cleanse
+sudo dpkg --remove morpheus-appliance
+sudo rm -rf /etc/morpheus
+sudo rm -rf /var/opt/morpheus
+sudo rm -rf /var/run/morpheus
+sudo rm -rf /var/log/morpheus
+sudo rm -rf /opt/morpheus
+
+# Step 9 - FILE EDIT on lab-lb: remove the lab-app-3 server line
+RUN ON: lab-lb
+sudo vi /etc/haproxy/haproxy.cfg
+#   Delete (or comment out) every "server lab-app-3 ..." line, e.g.:
+#     server lab-app-3 172.30.10.163:443 ssl verify none check port 80
+#   (there may be one in each backend section)
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+sudo systemctl restart haproxy
+
+
+================================================================================
+LAB 8.2  ADD A NEW NODE TO MORPHEUS                                (pp.138-140)
+================================================================================
+RUN ON: lab-app-4
+
+ssh morphadmin@lab-app-4
+
+# Step 2
+sudo apt-get update
+
+# Steps 3/4 - Same version as the rest of the cluster (8.0.4)
+wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.6-1_amd64.deb
+md5sum morpheus-appliance_8.0.6-1_amd64.deb
+sudo dpkg -i morpheus-appliance_8.0.6-1_amd64.deb
+
+# Steps 5/6 - MySQL Router (URL is ONE line here)
+wget https://dev.mysql.com/get/Downloads/MySQL-Router/mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
+md5sum mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
+sudo dpkg -i mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
+
+# Step 7 - Bootstrap
+sudo mysqlrouter --bootstrap clusterAdmin@lab-db-1:3306 --account routeruser --user=mysqlrouter --disable-rest
+
+# Step 8
+sudo systemctl restart mysqlrouter
+sudo systemctl enable mysqlrouter
+
+# Step 9
+sudo lsof -i -P -n | grep LISTEN | grep mysqlrouter
+
+# Step 10
+/opt/morpheus/embedded/mysql/bin/mysql -u morpheus -h 127.0.0.1 -P 6446 -p
+
+# Step 11
+sudo mkdir -p /var/opt/morpheus/morpheus-ui
+
+# Step 12 - FILE EDIT: /etc/fstab - add this line
+sudo vi /etc/fstab
+----8<----
+nas.megadata.com:/mnt/megadata-share/morpheus-ui /var/opt/morpheus/morpheus-ui nfs defaults 0 0
+----8<----
+# (or the one-liner used in Lab 5.5:)
+echo "nas.megadata.com:/mnt/megadata-share/morpheus-ui /var/opt/morpheus/morpheus-ui nfs defaults 0 0" | sudo tee -a /etc/fstab
+
+# Steps 13-15
+sudo apt-get install nfs-common -y
+sudo mount -a
+df -k
+
+# Step 16 [WinSCP] Copy the lab-app-4 morpheus.rb from
+#   C:\Classfiles\installation class to lab-app-4, then put it in place:
+sudo chown root:root /home/morphadmin/lab-app-4.morpheus.rb
+sudo chmod 600 /home/morphadmin/lab-app-4.morpheus.rb
+sudo mv /home/morphadmin/lab-app-4.morpheus.rb /etc/morpheus/morpheus.rb
+#   (file name assumed to follow the Lab 5.6 pattern - check the folder)
+
+# FILE CONTENT (reference) - lab-app-4 /etc/morpheus/morpheus.rb
+# NOT shown in the lab guide: derived from the Lab 5.6 files with node 3
+# replaced by node 4. Compare with the file supplied in Classfiles.
+----8<----
+appliance_url 'https://lab-lb.megadata.com'
+elasticsearch['es_hosts'] = {'172.30.10.161' => 9200, '172.30.10.162' => 9200, '172.30.10.164' => 9200}
+elasticsearch['node_name'] = '172.30.10.164'
+elasticsearch['host'] = '0.0.0.0'
+rabbitmq['host'] = '0.0.0.0'
+rabbitmq['nodename'] = 'rabbit@lab-app-4'
+mysql['enable'] = false
+mysql['host'] = {'127.0.0.1' => 6446}
+mysql['morpheus_db'] = 'morpheus'
+mysql['morpheus_db_user'] = 'morpheus'
+mysql['morpheus_password'] = 'Password123?'
+mysql['max_active'] = 150
+user['uid'] = 1099
+user['gid'] = 1099
+node.default['morpheus_solo']['local_user']['uid'] = 1098
+node.default['morpheus_solo']['local_user']['gid'] = 1098
+elasticsearch['uid'] = 1096
+elasticsearch['gid'] = 1096
+rabbitmq['uid'] = 1095
+rabbitmq['gid'] = 1095
+guacd['uid'] = 1094
+guacd['gid'] = 1094
+----8<----
+
+# Step 17 - FILE EDIT on lab-app-1 AND lab-app-2: /etc/morpheus/morpheus.rb
+RUN ON: lab-app-1, lab-app-2
+sudo vi /etc/morpheus/morpheus.rb
+#   Replace node 3's IP (.163) with node 4's IP (.164) in es_hosts:
+----8<----
+elasticsearch['es_hosts'] = {'172.30.10.161' => 9200, '172.30.10.162' => 9200, '172.30.10.164' => 9200}
+----8<----
+
+# Step 18 - Reconfigure the new node
+RUN ON: lab-app-4
+sudo morpheus-ctl reconfigure
+
+# Step 19 - Reconfigure lab-app-1, then lab-app-2 (ONE AT A TIME)
+RUN ON: lab-app-1, then lab-app-2
+sudo morpheus-ctl stop morpheus-ui
+sudo morpheus-ctl reconfigure
+sudo morpheus-ctl start morpheus-ui
+
+# Step 20 - Elasticsearch should report 3 nodes
+RUN ON: lab-app-4
+curl -XGET 'http://localhost:9200/_cluster/health?pretty=true'
+
+# Step 21 - Prepare lab-app-4 for RabbitMQ   [ROOT]
+RUN ON: lab-app-4
+sudo -i
+morpheus-ctl stop morpheus-ui
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl stop_app
+morpheus-ctl stop rabbitmq
+
+# Step 22 - Copy rabbitmq secrets from lab-app-1 to lab-app-4
+RUN ON: lab-app-1
+sudo cat /etc/morpheus/morpheus-secrets.json
+RUN ON: lab-app-4   [ROOT]  - FILE EDIT (same as Lab 5.8 step 4)
+vi /etc/morpheus/morpheus-secrets.json
+
+# Step 23 - Copy the erlang cookie from lab-app-1 to lab-app-4
+RUN ON: lab-app-1
+sudo cat /opt/morpheus/embedded/rabbitmq/.erlang.cookie
+RUN ON: lab-app-4   [ROOT]  - FILE EDIT: replace contents with lab-app-1's cookie
+vi /opt/morpheus/embedded/rabbitmq/.erlang.cookie
+
+# Step 24 - Reconfigure lab-app-4 only   [ROOT]
+RUN ON: lab-app-4
+morpheus-ctl reconfigure
+
+# Step 25 - Join the cluster   [ROOT]
+RUN ON: lab-app-4
+morpheus-ctl stop rabbitmq
+morpheus-ctl status rabbitmq
+morpheus-ctl start rabbitmq
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl stop_app
+rabbitmqctl join_cluster rabbit@lab-app-1
+rabbitmqctl start_app
+
+# Step 26 - 3 disk nodes / 3 running nodes   [ROOT]
+RUN ON: lab-app-1, lab-app-2, lab-app-4
+source /opt/morpheus/embedded/rabbitmq/.profile
+rabbitmqctl cluster_status
+
+# Step 28 (numbered out of order in the PDF) - reconfigure and start UI  [ROOT]
+RUN ON: lab-app-4
+morpheus-ctl reconfigure
+morpheus-ctl start morpheus-ui
+exit
+
+# Step 27 - FILE EDIT on lab-lb: add lab-app-4 server line(s)
+RUN ON: lab-lb
+sudo vi /etc/haproxy/haproxy.cfg
+#   In each backend where the lab-app-3 line was removed, add a lab-app-4 line
+#   in the same format as the others. For the #http/443 backend:
+----8<----
+    server lab-app-4 172.30.10.164:443 ssl verify none check port 80
+----8<----
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+sudo systemctl restart haproxy
+
+# Final step [UI] Administration > Health - Elasticsearch nodes list lab-app-4
+
+================================================================================
+END
+================================================================================
