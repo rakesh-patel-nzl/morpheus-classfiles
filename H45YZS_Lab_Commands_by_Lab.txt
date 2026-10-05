@@ -17,7 +17,7 @@ HOW TO USE
   - FILE EDIT blocks show the exact text to put in the file between the
     ----8<---- markers.
   - Password used throughout: Password123?
-  - Versions: Morpheus 8.0.3 -> upgrade to 8.0.4, MySQL 8.0,
+  - Versions: Morpheus 8.0.5 -> upgrade to 8.0.6, MySQL 8.0,
     MySQL Router 8.0.41. If your instructor gives a different version,
     change the version in every wget / md5sum / dpkg line.
 
