@@ -142,7 +142,7 @@ LAB 3.4  APPLIANCE BACKUP                                            (pp.40-46)
 
 
 ================================================================================
-LAB 3.5  ALL-IN-ONE UPGRADE (8.0.3 -> 8.0.4)                         (pp.47-50)
+LAB 3.5  ALL-IN-ONE UPGRADE (8.0.5 -> 8.0.6)                         (pp.47-50)
 ================================================================================
 RUN ON: lab-aio
 
@@ -202,9 +202,7 @@ sudo systemctl disable apparmor
 sudo ufw status
 
 # Step 7/8 - Download the MySQL APT repo package and check md5
-#            Expected: e1716b19b84b92f32e94dfd34892322c
 wget https://dev.mysql.com/get/mysql-apt-config_0.8.39-1_all.deb
-md5sum mysql-apt-config_0.8.39-1_all.deb
 
 # Step 9/10 - Install the repo package
 #   In the menu: select "MySQL Server & Cluster" > Enter > choose mysql-8.0 >
@@ -465,7 +463,6 @@ nslookup lab-app-3
 
 # Step 5 - Download and check md5
 wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.5-1_amd64.deb
-md5sum morpheus-appliance_8.0.5-1_amd64.deb
 
 # Step 6 - Install
 sudo dpkg -i morpheus-appliance_8.0.5-1_amd64.deb
@@ -518,7 +515,7 @@ wget https://dev.mysql.com/get/Downloads/MySQL-Router/mysql-router-community_8.0
 md5sum mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
 
 # Step 5 - Install
-sudo dpkg -i mysql-router-community_8.0.41-1ubuntu22.04_amd64.deb
+sudo dpkg -i mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
 
 # ---------- lab-app-1 ONLY (steps 6-10) ----------
 RUN ON: lab-app-1
@@ -851,7 +848,7 @@ sudo systemctl restart haproxy
 
 
 ================================================================================
-LAB 5.12  HIGH AVAILABILITY UPGRADE (8.0.3 -> 8.0.4, NON-ROLLING)  (pp.111-115)
+LAB 5.12  HIGH AVAILABILITY UPGRADE (8.0.5 -> 8.0.6, NON-ROLLING)  (pp.111-115)
 ================================================================================
 # Step 1 [UI] Check Administration > Health - all green, 3 Elastic nodes,
 #             no queued messages, no blocked threads
@@ -890,7 +887,6 @@ RUN ON: lab-app-1, lab-app-2, lab-app-3
 sudo morpheus-ctl stop morpheus-ui
 
 # Step 9 - Download on ALL THREE nodes
-#          Expected md5: ec1c466391003493d49ce8ac94ee585a
 wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.6-1_amd64.deb
 md5sum morpheus-appliance_8.0.6-1_amd64.deb
 
@@ -1244,12 +1240,10 @@ sudo apt-get update
 
 # Steps 3/4 - Same version as the rest of the cluster (8.0.4)
 wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.6-1_amd64.deb
-md5sum morpheus-appliance_8.0.6-1_amd64.deb
 sudo dpkg -i morpheus-appliance_8.0.6-1_amd64.deb
 
 # Steps 5/6 - MySQL Router (URL is ONE line here)
 wget https://dev.mysql.com/get/Downloads/MySQL-Router/mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
-md5sum mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
 sudo dpkg -i mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
 
 # Step 7 - Bootstrap
