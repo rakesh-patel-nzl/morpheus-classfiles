@@ -55,6 +55,7 @@ nslookup lab-aio
 # Step 8 - Download the package and check the md5 against Morpheus Hub
 wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.5-1_amd64.deb
 md5sum morpheus-appliance_8.0.5-1_amd64.deb
+# Expected output: 6e582d45351b04540cafe9f7738bcc73  morpheus-appliance_8.0.5-1_amd64.deb
 
 # Step 9 - Install the package
 sudo dpkg -i morpheus-appliance_8.0.5-1_amd64.deb
@@ -152,6 +153,7 @@ sudo morpheus-ctl status
 # Step 3 - Download the new package and check md5
 wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.6-1_amd64.deb
 md5sum morpheus-appliance_8.0.6-1_amd64.deb
+# expected output: d520d7a14938681e866f9674f12ee570  morpheus-appliance_8.0.6-1_amd64.deb
 
 # Step 4 - Stop the UI and confirm it is down
 sudo morpheus-ctl stop morpheus-ui
@@ -203,6 +205,8 @@ sudo ufw status
 
 # Step 7/8 - Download the MySQL APT repo package and check md5
 wget https://dev.mysql.com/get/mysql-apt-config_0.8.39-1_all.deb
+md5sum mysql-apt-config_0.8.39-1_all.deb
+# expected output: 8f722bb35fc6f510a2154a9466f5e2f7  mysql-apt-config_0.8.39-1_all.deb
 
 # Step 9/10 - Install the repo package
 #   In the menu: select "MySQL Server & Cluster" > Enter > choose mysql-8.0 >
@@ -463,6 +467,8 @@ nslookup lab-app-3
 
 # Step 5 - Download and check md5
 wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.5-1_amd64.deb
+md5sum morpheus-appliance_8.0.5-1_amd64.deb
+# Expected output: 6e582d45351b04540cafe9f7738bcc73  morpheus-appliance_8.0.5-1_amd64.deb
 
 # Step 6 - Install
 sudo dpkg -i morpheus-appliance_8.0.5-1_amd64.deb
@@ -513,6 +519,7 @@ nslookup lab-db-3
 #          NOTE: the URL is wrapped in the PDF - it is ONE line here
 wget https://dev.mysql.com/get/Downloads/MySQL-Router/mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
 md5sum mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
+# expected output: acd16612e760224014eb4fb3c92c8c37  mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
 
 # Step 5 - Install
 sudo dpkg -i mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
@@ -889,6 +896,7 @@ sudo morpheus-ctl stop morpheus-ui
 # Step 9 - Download on ALL THREE nodes
 wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.6-1_amd64.deb
 md5sum morpheus-appliance_8.0.6-1_amd64.deb
+# expected output: d520d7a14938681e866f9674f12ee570  morpheus-appliance_8.0.6-1_amd64.deb
 
 # Step 10 - lab-app-1 ONLY (finish fully before moving on)
 RUN ON: lab-app-1
@@ -896,7 +904,7 @@ sudo dpkg -i morpheus-appliance_8.0.6-1_amd64.deb
 sudo rm -rf /var/opt/morpheus/package-repos/*
 sudo morpheus-ctl reconfigure
 sudo morpheus-ctl tail morpheus-ui
-# Wait for the logo + version 8.0.4, then Ctrl+C
+# Wait for the logo + version 8.0.6, then Ctrl+C
 
 # Step 11 - lab-app-2 ONLY (finish fully before moving on)
 RUN ON: lab-app-2
@@ -1238,12 +1246,15 @@ ssh morphadmin@lab-app-4
 # Step 2
 sudo apt-get update
 
-# Steps 3/4 - Same version as the rest of the cluster (8.0.4)
+# Steps 3/4 - Same version as the rest of the cluster (8.0.6)
 wget https://downloads.morpheusdata.com/files/morpheus-appliance_8.0.6-1_amd64.deb
+md5sum morpheus-appliance_8.0.6-1_amd64.deb
+# expected output: d520d7a14938681e866f9674f12ee570  morpheus-appliance_8.0.6-1_amd64.deb
 sudo dpkg -i morpheus-appliance_8.0.6-1_amd64.deb
 
 # Steps 5/6 - MySQL Router (URL is ONE line here)
 wget https://dev.mysql.com/get/Downloads/MySQL-Router/mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
+# expected output: acd16612e760224014eb4fb3c92c8c37  mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
 sudo dpkg -i mysql-router-community_8.0.46-1ubuntu22.04_amd64.deb
 
 # Step 7 - Bootstrap
