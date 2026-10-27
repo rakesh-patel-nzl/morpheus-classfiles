@@ -3,7 +3,7 @@ HPE MORPHEUS ENTERPRISE SOFTWARE INSTALLATION (H45YZS.A.01)
 LAB COMMANDS AND FILE EDITS - IN LAB ORDER (copy/paste into PuTTY)
 ================================================================================
 Source : H45YZS.A.01_LG.pdf (Lab guide, Rev. 25.xx, May 2025)
-Order  : Follows the lab guide exactly, lab by lab, step by step.
+Order  : Follows the lab guide. YOU SHOULD ALSO HAVE THE LAB GUIDE OPEN.
          Page numbers (p.xx) refer to the lab guide PDF.
 
 HOW TO USE
@@ -394,11 +394,7 @@ CREATE DATABASE testdb;
 # Step 3 [MYSQL] ALL nodes - testdb should appear everywhere
 show databases;
 
-# Step 4 [MYSQL] One REPLICA - expected to FAIL (super-read-only)
-use testdb;
-CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(255));
-
-# Step 5 [MYSQL] PRIMARY - succeeds
+# Step 4 & 5 [MYSQL] One REPLICA - expected to FAIL (super-read-only)
 use testdb;
 CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(255));
 INSERT INTO testdb.test VALUES (1, 'neo');
